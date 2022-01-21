@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - geometry - chateau</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<link type="text/css" rel="stylesheet" href="main.css">
+	</head>
+	<body>
+		<audio id="nature" preload="auto" style="display: none">
+		<source src="one-minute-nature-sound.ogg" type="audio/ogg">
+		<source src="one-minute-nature-sound.mp3" type="audio/mpeg">
+	</audio>
+
+		<div id="container"></div>
+		<script type="module">
+
+			// Imports
+			import * as THREE from '../three.js-master/build/three.module.js';
+			import Stats from '../three.js-master/examples/jsm/libs/stats.module.js';
+			import { FBXLoader } from '../three.js-master/examples/jsm/loaders/FBXLoader.js';
+			import { OrbitControls } from '../three.js-master/examples/jsm/controls/OrbitControls.js'; //Enlever et mettre PointerlockControls
+			import { GUI } from '../three.js-master/examples/jsm/libs/dat.gui.module.js';
+
+			//Variables
+			let camera, scene, renderer;
+			let PointLight, lightHelper, shadowCameraHelper;
+			let geometry, object, objectDoor;
+			let gui;
+			let container, stats, clock, men1, men2, mixer1, mixer2, grass;
+			let analyser1;
+
+//Dorian 20/01/2022
+//Changements: ajout couleur arrière plan, changement distance de vision, position de soleil
+//agrandissement de terrain, spotlight en Pointlight, mise en place de "pelouse" a garder ? oui/non
+//son de nature
+
+			function init() {
+
+				container = document.getElementById( 'container' );
+
+				renderer = new THREE.WebGLRenderer( { antialias: true } );
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				document.body.appendChild( renderer.domElement );
+				renderer.setClearColor(0x9fd2f1, 1.0);  // Couleur arrière plan
+
+				stats = new Stats();
+				container.appendChild( stats.dom );
+
+				renderer.shadowMap.enabled = true;
+				renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+				renderer.outputEncoding = THREE.sRGBEncoding;
+
+				scene = new THREE.Scene();
+				clock = new THREE.Clock(); // controler la vitesse de la scene
+
+				camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 1, 10000 );
+				camera.position.set(0, 200, 500);
+
+				//Orbit controls
+				const controls = new OrbitControls( camera, renderer.domElement );
+				controls.addEventListener( 'change', render );
+				controls.minDistance = 20;
+				controls.maxDistance = 5000;
+				controls.enablePan = false;
+
+				// Light param
+				const ambient = new THREE.AmbientLight( 0xffffff, 0.01 );
+				scene.add( ambient );
+
+				PointLight = new THREE.PointLight( 0xffffff, 1 );
+				PointLight.position.set( 500, 500, 500 );
+				PointLight.angle = Math.PI / 4;
+				PointLight.penumbra = 0.1;
+				PointLight.decay = 2;
+				PointLight.distance = 7500;
+
+				PointLight.castShadow = true;
+				PointLight.shadow.mapSize.width = 512;
+				PointLight.shadow.mapSize.height = 512;
+				PointLight.shadow.camera.near = 10;
+				PointLight.shadow.camera.far = 200;
+				PointLight.shadow.focus = 1;
+				scene.add( PointLight );
+
+
+/*
+				// model 1
+				const loader1 = new FBXLoader();
+				loader1.load( 'men1.fbx', function ( men1 ) {
+
+					mixer1 = new THREE.AnimationMixer( men1 );
+
+					const action1 = mixer1.clipAction( men1.animations[ 0 ] );
+					action1.play();
+
+					men1.traverse( function ( child1 ) {
+
+						if ( child1.isMesh ) {
+
+							child1.castShadow = true;
+							child1.receiveShadow = true;
+
+						}
+
+					} );
+
+					scene.add( men1 );
+					men1.position.set(80,-102,100);
+					men1.rotation.y = - Math.PI * 0.25;
+
+				} );
+
+
+				// model 2
+				const loader2 = new FBXLoader();
+				loader2.load( 'men2.fbx', function ( men2 ) {
+
+					mixer2 = new THREE.AnimationMixer( men2 );
+
+					const action2 = mixer2.clipAction( men2.animations[ 0 ] );
+					action2.play();
+
+					men2.traverse( function ( child2 ) {
+
+						if ( child2.isMesh ) {
+
+							child2.castShadow = true;
+							child2.receiveShadow = true;
+
+						}
+
+					} );
+
+					scene.add( men2 );
+					men2.position.set(-80,-102,100);
+					men2.rotation.y = - Math.PI * -0.5;
+
+				} );
+*/
+				//GRASS
+				const loader3 = new FBXLoader();
+				loader3.load( 'grass1.fbx', function ( object ) {
+
+
+					scene.add( object.scene );
+					grass.position.set(-80, -100, 100);
+
+				} );
+
+
+				// Textures
+				const textureRoof = new THREE.TextureLoader().load( 'roof.jpg' );
+				const textureDoor = new THREE.TextureLoader().load( 'door.jpg' );
+				const textureWall = new THREE.TextureLoader().load( 'stone.jpg' );
+				const textureGround = new THREE.TextureLoader().load( 'grass.jpg' );
+				const materialRoof = new THREE.MeshPhongMaterial( { map: textureRoof } );
+				const materialDoor = new THREE.MeshPhongMaterial( { map: textureDoor } );
+				const materialWall = new THREE.MeshPhongMaterial( { map: textureWall } );
+				const materialGround = new THREE.MeshPhongMaterial( { map: textureGround } );
+
+
+/*
+
+				//Sons - Music
+
+				const mesh1 = new THREE.Mesh( sphere, material1 );
+				mesh1.position.set( - 250, 30, 0 );
+				scene.add( mesh1 );
+
+				const sound1 = new THREE.PositionalAudio( listener );
+				const songElement = document.getElementById( 'nature' );
+				sound1.setMediaElementSource( songElement );
+				sound1.setRefDistance( 20 );
+				songElement.play();
+				mesh1.add( sound1 );
+
+
+				//Analyser Sons
+				analyser1 = new THREE.AudioAnalyser( sound1, 32 );
+
+				//Sound controls & Volume
+				const SoundControls = function () {
+
+					this.firstSphere = sound1.getVolume();
+
+					volumeFolder.add( soundControls, 'firstSphere' ).min( 0.0 ).max( 1.0 ).step( 0.01 ).onChange( function () {
+
+				sound1.setVolume( soundControls.firstSphere );
+
+			} );
+
+			function render() {
+
+		const delta = clock.getDelta();
+
+		controls.update( delta );
+
+		material1.emissive.b = analyser1.getAverageFrequency() / 256;
+
+		renderer.render( scene, camera );
+
+	}
+
+
+*/
+
+				function tour(x, y, z, s) { // cylinder
+					geometry = new THREE.CylinderGeometry( 50, 50, 200, 100 ); // base
+					object = new THREE.Mesh( geometry, materialWall );
+					object.position.set(x, y*s, z);
+					object.scale.set(s, s, s);
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+
+					geometry = new THREE.CylinderGeometry( 60, 50, 10, 100 ); // middle bottom
+					object = new THREE.Mesh( geometry, materialWall );
+					object.position.set(x, (y + 105)*s, z);
+					object.scale.set(s, s, s);
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+
+					geometry = new THREE.CylinderGeometry( 60, 60, 50, 100 ); // middle top
+					object = new THREE.Mesh( geometry, materialWall );
+					object.position.set(x, (y + 135)*s, z);
+					object.scale.set(s, s, s);
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+
+					geometry = new THREE.ConeGeometry( 60, 100, 10); // top
+					object = new THREE.Mesh( geometry, materialRoof );
+					object.position.set(x, (y + 210)*s, z);
+					object.scale.set(s, s, s);
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+				}
+
+				function wall(x, y, z, r) {
+					geometry = new THREE.BoxGeometry(400, 100, 10);
+					object = new THREE.Mesh( geometry, materialWall );
+					object.position.set(x, y, z);
+					object.rotation.y = r;
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+				}
+
+				function smallWall(x, y, z) {
+					geometry = new THREE.BoxGeometry(125, 100, 12);
+					object = new THREE.Mesh( geometry, materialWall );
+					object.position.set(x, y, z);
+					object.castShadow = true;
+					object.receiveShadow = true;
+					scene.add( object );
+				}
+
+				function door(x, y, z) {
+					geometry = new THREE.BoxGeometry(125, 100, 20);
+					objectDoor = new THREE.Mesh( geometry, materialDoor );
+					objectDoor.position.set(x, y, z);
+					objectDoor.castShadow = true;
+					objectDoor.receiveShadow = true;
+					scene.add( objectDoor );
+				}
+
+				function ground(x, y, z, r) {
+					geometry = new THREE.PlaneGeometry( 10000, 10000 );
+					object = new THREE.Mesh( geometry, materialGround );
+					textureGround.wrapS = THREE.RepeatWrapping;
+					textureGround.wrapT = THREE.RepeatWrapping;
+					textureGround.repeat.set( 100, 100 );
+					object.position.set(x, y, z);
+					object.rotation.x = r;
+					object.receiveShadow = true;
+					scene.add( object );
+				}
+
+				function castle() {
+					tour(-200, 0, 0, 1); // tower left
+					tour(200, 0, 0, 1); // tower right
+					tour(-200, 0, -400, 1); // tower left back
+					tour(200, 0, -400, 1); // tower left right
+					tour(0, 33, -200, 1.5); // tower center
+					wall(0, -50, -400, 2 * Math.PI); // wall back
+					wall(200, -50, -200, 3 * Math.PI / 2); // wall right
+					wall(-200, -50, -200, Math.PI / 2); // wall left
+					smallWall(125, -50, 0); // wall front right
+					smallWall(-125, -50, 0); // wall front left
+					door(0, -50, 0);
+					ground(0, -102, -250, - Math.PI * 0.5);
+				}
+
+				castle();
+
+				window.addEventListener( 'resize', onWindowResize );
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function render() {
+
+				requestAnimationFrame( render );
+				const delta = clock.getDelta();
+
+				if ( mixer1 ) mixer1.update( delta );
+				if ( mixer2 ) mixer2.update( delta );
+
+				renderer.render( scene, camera );
+
+				stats.update();
+
+			}
+
+			function buildGui() {
+
+				gui = new GUI();
+
+				const params = {
+					intensity: PointLight.intensity,
+					distance: PointLight.distance,
+					angle: PointLight.angle,
+					penumbra: PointLight.penumbra,
+					decay: PointLight.decay,
+					focus: PointLight.shadow.focus,
+					x: PointLight.position.x,
+					y: PointLight.position.y,
+					z: PointLight.position.z,
+					door: objectDoor.position.x,
+					//men: men.position.z,
+				};
+
+				/*gui.add( params, 'men', 0, -100 ).onChange( function ( val ) {
+
+					men.position.z = val;
+					render();
+
+				} );*/
+
+				gui.add( params, 'door', 0, 125 ).onChange( function ( val ) {
+
+					objectDoor.position.x = val;
+					render();
+
+				} );
+
+				gui.add( params, 'intensity', 0, 2 ).onChange( function ( val ) {
+
+					PointLight.intensity = val;
+					render();
+
+				} );
+
+
+				gui.add( params, 'distance', 50, 3000 ).onChange( function ( val ) {
+
+					PointLight.distance = val;
+					render();
+
+				} );
+
+				gui.add( params, 'angle', 0, Math.PI / 3 ).onChange( function ( val ) {
+
+					PointLight.angle = val;
+					render();
+
+				} );
+
+				gui.add( params, 'penumbra', 0, 1 ).onChange( function ( val ) {
+
+					PointLight.penumbra = val;
+					render();
+
+				} );
+
+				gui.add( params, 'decay', 1, 2 ).onChange( function ( val ) {
+
+					PointLight.decay = val;
+					render();
+
+				} );
+
+				gui.add( params, 'focus', 0, 1 ).onChange( function ( val ) {
+
+					PointLight.shadow.focus = val;
+					render();
+
+				} );
+
+				gui.add( params, 'x', 0, 1000 ).onChange( function ( val ) {
+
+					PointLight.position.x = val;
+					render();
+
+				} );
+
+				gui.add( params, 'y', 0, 1000 ).onChange( function ( val ) {
+
+					PointLight.position.y = val;
+					render();
+
+				} );
+
+				gui.add( params, 'z', 0, 1000 ).onChange( function ( val ) {
+
+					PointLight.position.z = val;
+					render();
+
+				} );
+
+				gui.open();
+
+			}
+
+			init();
+			render();
+			buildGui();
+
+		</script>
+
+	</body>
+</html>
